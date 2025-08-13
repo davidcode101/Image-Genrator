@@ -1,147 +1,35 @@
-// import userModel from "../models/userModel.js";
-// import bcrypt from 'bcrypt';
-// import jwt from 'jsonwebtoken';
-// import razorpay from 'razorpay'
-// import transactionModel from "../models/transactionModel.js";
-
-
-// const registerUser = async (req, res) => {
-//     try {
-//         const { name, email, password } = req.body;
-//         if (!name || !email || !password) {
-//             return res.json({ success: false, message: 'Please fill all the fields' });
-//         }
-
-//         const salt = await bcrypt.genSalt(10);
-//         const hashedPassword = await bcrypt.hash(password, salt);
-
-//         const newUser = new userModel({
-//             name,
-//             email,
-//             password: hashedPassword
-//         });
-
-//         const user = await newUser.save();
-//         const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET);
-
-//         res.json({ success: true, token, user: { name: user.name } });
-//     } catch (error) {
-//         console.log(error);
-//         res.json({ success: false, message: error.message });
-//     }
-// };
-
-// const loginUser = async (req, res) => {
-//     try {
-//         const { email, password } = req.body;
-
-//         const user = await userModel.findOne({ email });
-//         if (!user) {
-//             return res.json({ success: false, message: 'User not found' });
-//         }
-
-//         const isMatch = await bcrypt.compare(password, user.password);
-//         if (isMatch) {
-//             const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET);
-//             res.json({ success: true, token, user: { name: user.name } });
-//         } else {
-//             res.json({ success: false, message: 'Invalid credentials' });
-//         }
-//     } catch (error) {
-//         console.log(error);
-//         res.json({ success: false, message: error.message });
-//     }
-// };
-
-// const userCredits = async (req, res) => {
-//     try {
-//         const { userId } = req; // ✅ comes from middleware now
-//         const user = await userModel.findById(userId);
-
-//         res.json({
-//             success: true,
-//             credits: user.creditBalance,
-//             user: { name: user.name }
-//         });
-//     } catch (error) {
-//         console.log(error.message);
-//         res.json({ success: false, message: error.message });
-//     }
-// };
-// const razorpayInstance=new razorpay({
-//     key_id: process.env.RAZORPAY_KEY_ID,
-//     key_secret: process.env.RAZORPAY_KEY_SECRET
-// });
-
-// const paymentRazorpay=async(req,res)=>{
-//     try {
-//         const {userId,planId}=req.body
-//         const userData=await userModel.findById(userId)
-
-//         if(!userId || !planId){
-//          return res.json({success:false,message:'missing details'})
-//         }
-
-//        let credits,plan,amount,data
-//        switch (planId) {
-//         case 'Basic':
-//               plan='Basic'
-//               credits=100
-//               amount=10
-//             break;
-//         case 'Advanced':
-//               plan='Advanced'
-//               credits=500
-//               amount=50
-//               break;
-//         case 'Business':
-//               plan='Business'
-//               credits=500
-//               amount=250
-//               break;
-       
-//         default:
-//             return res.json({success:flase,message:'plan not found'})
-          
-//        }
-//      date=Date.now();
-     
-//      const transactionData={
-//         userId,plan,amount,credits,date
-//      }
-//     const newTransaction=await transactionModel.create(transactionData)
-
-//     const options={
-//         amount:amount *100,
-//         currency:process.env.CURRENCY,
-//         recepit:newTransaction._id
-//     }
-
-//     await razorpayInstance.orders.create(options,(error,order)=>{
-//          if (error){
-//             console.log(error);
-//             return res.json({success:false,message:error})
-//          }
-//          res.json({success:true,order})
-//     })
-
-//     } catch (error) {
-//         console.log(error)
-//         res.json({success:false,message: error.message})
-//     }
-
-
-
-// }
-
-// export { registerUser, loginUser, userCredits,paymentRazorpay };
 import userModel from "../models/userModel.js";
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import Razorpay from 'razorpay';
 import transactionModel from "../models/transactionModel.js";
+import nodemailer from 'nodemailer';
+import crypto from 'crypto';
+import 'dotenv/config'; // Load .env variables
 
-// Register
+// Helper - Send verification email
+const sendVerificationEmail = async (email, token) => {
+  const transporter = nodemailer.createTransport({
+    host: 'smtp.gmail.com',
+    port: 465,
+    secure: true,
+    auth: {
+      user: process.env.SMTP_EMAIL,
+      pass: process.env.SMTP_PASS
+    }
+  });
+
+  const verifyLink = `http://localhost:4000/api/user/verify-email/${token}`;
+
+  await transporter.sendMail({
+    from: process.env.SMTP_EMAIL,
+    to: email,
+    subject: 'Verify your email - My App',
+    html: `<p>Click <a href="${verifyLink}">here</a> to verify your email.</p>`
+  });
+};
+
+// Register User
 const registerUser = async (req, res) => {
   try {
     const { name, email, password } = req.body;
@@ -149,27 +37,72 @@ const registerUser = async (req, res) => {
       return res.json({ success: false, message: 'Please fill all the fields' });
     }
 
+    const existingUser = await userModel.findOne({ email });
+
+    if (existingUser) {
+      if (!existingUser.verified) {
+        // Resend verification email if unverified
+        await sendVerificationEmail(email, existingUser.emailVerificationToken);
+        return res.json({ success: true, message: 'Email not verified. Verification email resent.' });
+      } else {
+        return res.json({ success: false, message: 'Email already registered' });
+      }
+    }
+
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
+    const verificationToken = crypto.randomBytes(32).toString('hex');
 
-    const newUser = new userModel({ name, email, password: hashedPassword });
-    const user = await newUser.save();
-    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET);
+    const newUser = new userModel({
+      name,
+      email,
+      password: hashedPassword,
+      verified: false,
+      emailVerificationToken: verificationToken
+    });
 
-    res.json({ success: true, token, user: { name: user.name } });
+    await newUser.save();
+    await sendVerificationEmail(email, verificationToken);
+
+    res.json({ success: true, message: 'Verification email sent' });
   } catch (error) {
     console.log(error);
     res.json({ success: false, message: error.message });
   }
 };
 
-// Login
+// Verify Email
+const verifyEmail = async (req, res) => {
+  try {
+    const { token } = req.params;
+    const user = await userModel.findOne({ emailVerificationToken: token });
+
+    if (!user) {
+      return res.json({ success: false, message: 'Invalid or expired token' });
+    }
+
+    user.verified = true;
+    user.emailVerificationToken = undefined;
+    await user.save();
+
+    res.json({ success: true, message: 'Email verified successfully. You can now log in.' });
+  } catch (error) {
+    res.json({ success: false, message: error.message });
+  }
+};
+
+// Login User
 const loginUser = async (req, res) => {
   try {
     const { email, password } = req.body;
     const user = await userModel.findOne({ email });
+
     if (!user) {
       return res.json({ success: false, message: 'User not found' });
+    }
+
+    if (!user.verified) {
+      return res.json({ success: false, message: 'Please verify your email first' });
     }
 
     const isMatch = await bcrypt.compare(password, user.password);
@@ -185,7 +118,7 @@ const loginUser = async (req, res) => {
   }
 };
 
-// Get credits
+// Get Credits
 const userCredits = async (req, res) => {
   try {
     const { userId } = req;
@@ -211,7 +144,7 @@ const razorpayInstance = new Razorpay({
 const paymentRazorpay = async (req, res) => {
   try {
     const { planId } = req.body;
-    const userId = req.userId; // ✅ from auth middleware
+    const userId = req.userId;
 
     if (!userId || !planId) {
       return res.json({ success: false, message: 'Missing details' });
@@ -249,45 +182,41 @@ const paymentRazorpay = async (req, res) => {
     });
 
     const options = {
-      amount: amount * 100, // smallest currency unit (paise)
+      amount: amount * 100,
       currency: process.env.CURRENCY || "INR",
       receipt: newTransaction._id.toString()
     };
 
-    console.log("Creating Razorpay order:", options);
-
     const order = await razorpayInstance.orders.create(options);
-
-    console.log("Razorpay order created successfully:", order);
-
     res.json({ success: true, order });
 
   } catch (error) {
-    console.error("Razorpay order error:", error);
     res.json({ success: false, message: error.error?.description || error.message });
   }
 };
-const verifyRazorpay=async (req,res) => {
+
+// Verify Razorpay Payment
+const verifyRazorpay = async (req, res) => {
   try {
-    const {razorpay_order_id}=req.body;
-    const orderInfo=await razorpayInstance.orders.fetch
-    (razorpay_order_id)
-    if (orderInfo.status==='paid') {
-      const transactionData=await transactionModel.findById(orderInfo.receipt)
+    const { razorpay_order_id } = req.body;
+    const orderInfo = await razorpayInstance.orders.fetch(razorpay_order_id);
+
+    if (orderInfo.status === 'paid') {
+      const transactionData = await transactionModel.findById(orderInfo.receipt);
       if (transactionData.payment) {
-        return res.json({success:false,message:'payment faield'})
+        return res.json({ success: false, message: 'Payment already processed' });
       }
-      const userData=await userModel.findById(transactionData.userId)
-      const creditBalance= userData.creditBalance+transactionData.credits
-      await userModel.findByIdAndUpdate(userData._id,{creditBalance})
-      await transactionModel.findByIdAndUpdate(transactionData._id,{payment:true})
-      res.json({success:true,message:"credits added"})
-    }else{
-      res.json({success:true,message:"credits added"})
+      const userData = await userModel.findById(transactionData.userId);
+      const creditBalance = userData.creditBalance + transactionData.credits;
+      await userModel.findByIdAndUpdate(userData._id, { creditBalance });
+      await transactionModel.findByIdAndUpdate(transactionData._id, { payment: true });
+      res.json({ success: true, message: "Credits added" });
+    } else {
+      res.json({ success: false, message: "Payment not completed" });
     }
   } catch (error) {
-    res.json({success:false,message:error.message})
+    res.json({ success: false, message: error.message });
   }
-}
+};
 
-export { registerUser, loginUser, userCredits, paymentRazorpay,verifyRazorpay };
+export { registerUser, verifyEmail, loginUser, userCredits, paymentRazorpay, verifyRazorpay };
