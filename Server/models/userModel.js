@@ -1,14 +1,16 @@
 import mongoose from 'mongoose';
 
-// userModel.js
+// Schema for storing user information
 const userSchema = new mongoose.Schema({
-    name: { type: String, required: true },
-    email: { type: String, required: true, unique: true },
-    password: { type: String, required: true },
-    creditBalance: { type: Number, default: 5 },
-    verified: { type: Boolean, default: false },
-    emailVerificationToken: { type: String }
+    name: { type: String, required: true },                  // User's full name
+    email: { type: String, required: true, unique: true },   // User's email (must be unique)
+    password: { type: String, required: true },              // Hashed password
+    creditBalance: { type: Number, default: 5 },             // User's available credits (default 5)
+    verified: { type: Boolean, default: false },             // Whether email is verified
+    emailVerificationToken: { type: String }                 // Token for email verification
 });
 
-const userModel = mongoose.models.user  ||  mongoose.model("user", userSchema);
+// Reuse existing model if it exists, else create new
+const userModel = mongoose.models.user || mongoose.model("user", userSchema);
+
 export default userModel;
