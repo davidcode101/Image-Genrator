@@ -41,9 +41,10 @@ const Header = () => {
       </div>
 
       {/* Main heading */}
-      <h1 className="text-4xl max-w-[300px] sm:text-7xl sm:max-w-[590px] mx-auto mt-10 text-center">
-        Text to <span className="text-blue-700">Image</span> Generator
-      </h1>
+    <h1 className="text-4xl max-w-[300px] sm:text-7xl sm:max-w-[590px] mx-auto mt-10 text-center">
+  Text to <span className="text-blue-700 font-indie">Image</span>
+  <span className="block text-gray-800">Ai</span>
+</h1>
 
       {/* Description paragraph */}
       <p className="text-center max-w-xl mx-auto mt-5">

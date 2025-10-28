@@ -1,0 +1,14 @@
+@import url('https://fonts.googleapis.com/css2?family=Indie+Flower&family=Ultra&display=swap');
+@import "tailwindcss";
+
+
+
+
+.placeholder-color {
+  color: #e0e0e0;
+  font-weight: 300;
+}
+
+.font-indie {
+  font-family: 'Indie Flower', cursive;
+}

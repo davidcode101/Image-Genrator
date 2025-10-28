@@ -6,7 +6,7 @@ import userRouter from './routes/userRoutes.js';
 import imageRouter from './routes/imageRoutes.js';
 
 const app = express();
-const PORT = process.env.PORT;
+const PORT = process.env.PORT || 5000;
 
 // Middlewares
 app.use(express.json());
